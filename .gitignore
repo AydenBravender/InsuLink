@@ -30,5 +30,5 @@ models
 *.kaggle
 *.venv
 models/*.gguf
-eeg_data
+data_*
 

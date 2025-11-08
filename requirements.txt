@@ -4,3 +4,5 @@ scikit-learn
 tensorflow
 joblib
 kagglehub
+mne
+scipy
