@@ -26,3 +26,7 @@ dist-ssr
 *.sln
 *.sw?
 *.wav
+models 
+*.kaggle
+*.venv
+/Data
