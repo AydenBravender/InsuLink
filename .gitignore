@@ -30,3 +30,5 @@ models
 *.kaggle
 *.venv
 /Data
+models/*.gguf
+
