@@ -1,84 +1,87 @@
-import time
 import numpy as np
 import pandas as pd
-from scipy.signal import find_peaks
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout, Flatten, Conv1D, MaxPooling1D
+from tensorflow.keras.utils import to_categorical
+from tensorflow.keras.callbacks import EarlyStopping
+from tensorflow.keras.optimizers import Adam
+
+# === Load datasets ===
+mitbih_train = pd.read_csv('mitbih_train.csv', header=None)
+mitbih_test = pd.read_csv('mitbih_test.csv', header=None)
+ptbdb_abnormal = pd.read_csv('ptbdb_abnormal.csv', header=None)
+ptbdb_normal = pd.read_csv('ptbdb_normal.csv', header=None)
+
+# === Combine data ===
+data_mitbih = pd.concat([mitbih_train, mitbih_test])
+data_ptbdb = pd.concat([ptbdb_abnormal, ptbdb_normal])
+
+# MIT-BIH has 5 classes, PTBDB has 2 — keep them separate for now but merge format
+X_mitbih = data_mitbih.iloc[:, :-1].values
+y_mitbih = data_mitbih.iloc[:, -1].values
+
+X_ptbdb = data_ptbdb.iloc[:, :-1].values
+y_ptbdb = data_ptbdb.iloc[:, -1].values + 5  # shift labels so they don't overlap (for future use)
+
+# Use only MIT-BIH (5 categories) for now
+X = X_mitbih
+y = y_mitbih
+
+# === Preprocess ===
+scaler = StandardScaler()
+X = scaler.fit_transform(X)
+X = np.expand_dims(X, axis=2)  # add channel dimension for Conv1D
+
+# One-hot encode labels
+y = to_categorical(y, num_classes=5)
+
+# Split into train/test
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+# === Define model ===
+model = Sequential([
+    Conv1D(64, kernel_size=5, activation='relu', input_shape=(X.shape[1], 1)),
+    MaxPooling1D(pool_size=2),
+    Dropout(0.2),
+    
+    Conv1D(128, kernel_size=3, activation='relu'),
+    MaxPooling1D(pool_size=2),
+    Dropout(0.2),
+    
+    Flatten(),
+    Dense(128, activation='relu'),
+    Dropout(0.3),
+    Dense(5, activation='softmax')
+])
+
+# === Compile ===
+model.compile(
+    loss='categorical_crossentropy',
+    optimizer=Adam(learning_rate=0.001),
+    metrics=['accuracy']
+)
+
+# === Train ===
+early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+
+history = model.fit(
+    X_train, y_train,
+    epochs=30,
+    batch_size=128,
+    validation_split=0.2,
+    callbacks=[early_stop],
+    verbose=1
+)
+
+# === Evaluate ===
+loss, acc = model.evaluate(X_test, y_test, verbose=0)
+print(f"Test Accuracy: {acc:.4f}")
+
+# === Save model and scaler ===
+model.save('ecg_model.h5')
 import joblib
-from tensorflow.keras.models import load_model
+joblib.dump(scaler, 'ecg_scaler.pkl')
 
-# === Constants ===
-CSV_FILE = "live_bioamp.csv"   # CSV being updated with BioAmp data
-SCALER_PATH = "ecg_scaler.pkl" # Saved scaler from training
-MODEL_PATH = "ecg_model.h5"    # Trained model
-BEAT_LENGTH = 188              # Number of samples per beat
-FS = 125                       # BioAmp sampling frequency
-
-# === Load model + scaler ===
-scaler = joblib.load(SCALER_PATH)
-model = load_model(MODEL_PATH)
-
-# Map numeric predictions to heartbeat classes
-CLASS_MAP = {
-    0: 'N',  # Normal
-    1: 'S',  # Supraventricular
-    2: 'V',  # Ventricular
-    3: 'F',  # Fusion
-    4: 'Q'   # Unknown
-}
-
-# === Functions ===
-def preprocess_beat(beat):
-    """Normalize and reshape a single beat to feed into the model"""
-    beat_scaled = scaler.transform(beat.reshape(1, -1))
-    return beat_scaled[..., np.newaxis]  # add channel dimension for Conv1D
-
-def segment_beats(ecg_signal, fs=FS):
-    """Detect R-peaks and segment each beat"""
-    distance = int(0.6 * fs)  # minimum distance between peaks (~0.6s)
-    peaks, _ = find_peaks(ecg_signal, distance=distance, height=np.mean(ecg_signal))
-
-    beats = []
-    half_len = BEAT_LENGTH // 2
-    for peak in peaks:
-        start = peak - half_len
-        end = peak + half_len
-        if start < 0:
-            beat = np.pad(ecg_signal[0:end], (abs(start), 0), 'constant')
-        elif end > len(ecg_signal):
-            beat = np.pad(ecg_signal[start:], (0, end - len(ecg_signal)), 'constant')
-        else:
-            beat = ecg_signal[start:end]
-        beats.append(beat)
-    return np.array(beats)
-
-def get_live_beats(csv_file):
-    """Continuously read CSV and return preprocessed beats"""
-    last_rows = 0
-    while True:
-        try:
-            df = pd.read_csv(csv_file, header=None)
-            if len(df) > last_rows:
-                new_data = df.iloc[last_rows:].values.flatten()
-                last_rows = len(df)
-
-                beats = segment_beats(new_data)
-                processed_beats = np.array([preprocess_beat(b) for b in beats])
-                if len(processed_beats) > 0:
-                    yield processed_beats
-            time.sleep(0.5)
-        except FileNotFoundError:
-            print(f"{csv_file} not found, waiting...")
-            time.sleep(1)
-
-def predict_beats(beats):
-    """Predict heartbeat classes for a batch of beats"""
-    predictions = model.predict(beats, verbose=0)
-    predicted_classes = np.argmax(predictions, axis=1)
-    return [CLASS_MAP[c] for c in predicted_classes]
-
-# === Main real-time loop ===
-if __name__ == "__main__":
-    print("🚀 Starting live ECG monitoring...")
-    for beats in get_live_beats(CSV_FILE):
-        classes = predict_beats(beats)
-        for i, cls in enumerate(classes):
-            print(f"Beat {i+1}: {cls}")
+print("✅ Model trained and saved as 'ecg_model.h5' and scaler as 'ecg_scaler.pkl'.")
