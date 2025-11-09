@@ -40,7 +40,7 @@ export default function HealthIndicator() {
             {/* Rotating glow ring (only for "good" status) */}
             {healthStatus === "good" && (
               <div
-                className="absolute inset-[-10px] rounded-full border-[6px] opacity-60 blur-md"
+                className="absolute -inset-2.5 rounded-full border-[6px] opacity-60 blur-md"
                 style={{
                   borderColor: "#22c55e transparent transparent transparent",
                   animation: "spinGlow 3s linear infinite",
