@@ -1,55 +1,48 @@
 // src/lib/api.ts
-
 const BASE = "http://127.0.0.1:8000";
 
-export type Category = "med" | "food" | "sleep";
-export type Question = { id: string; category: Category; text: string };
-export type QAAnswer = { category: Category; text: string };
-
 export async function getQuestions() {
-  const res = await fetch(`${BASE}/questions`);
-  if (!res.ok) throw new Error("Failed to load questions");
-  return res.json() as Promise<{ questions: Question[] }>;
+  const r = await fetch(`${BASE}/questions`);
+  if (!r.ok) throw new Error("Failed to load questions");
+  const json = (await r.json()) as { questions: { med: string[]; food: string[]; sleep: string[] } };
+  console.log("[api] questions", json);
+  return json;
 }
 
 export async function ttsSpeak(text: string) {
-  const res = await fetch(`${BASE}/tts`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-  });
-  if (!res.ok) throw new Error("TTS failed");
-  const buf = await res.arrayBuffer();
-  const blob = new Blob([buf], { type: "audio/mpeg" });
-  const url = URL.createObjectURL(blob);
-  return url; // caller can new Audio(url).play()
+  const form = new FormData();
+  form.append("text", text);
+  const r = await fetch(`${BASE}/tts`, { method: "POST", body: form });
+  const json = await r.json();
+  return json.audioUrl as string; // data: URL
 }
 
 export async function transcribeAudio(blob: Blob) {
   const form = new FormData();
-  const filename = blob.type.includes("webm") ? "audio.webm" : "audio.wav";
-  form.append("file", blob, filename);
-
-  const res = await fetch(`${BASE}/transcribe`, {
-    method: "POST",
-    body: form,
-  });
-
-  return res.json() as Promise<{ text: string }>;
+  form.append("file", blob, "audio.webm");
+  const r = await fetch(`${BASE}/transcribe`, { method: "POST", body: form });
+  const json = (await r.json()) as { text: string };
+  console.log("[api] transcript", json);
+  return json;
 }
 
-export async function analyzeAnswers(answers: QAAnswer[]) {
-  const res = await fetch(`${BASE}/analyze`, {
+export async function analyzeAnswers(payload: {
+  med: string[];
+  food: string[];
+  sleep: string[];
+}) {
+  const r = await fetch(`${BASE}/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ answers }),
+    body: JSON.stringify({ answers: payload }),
   });
-
-  return res.json() as Promise<{
-    med: number;
-    food: number;
-    sleep: number;
-    avg: number;
-    suggestions?: { med: string; food: string; sleep: string };
-  }>;
+  if (!r.ok) throw new Error("Analyze failed");
+  const json = (await r.json()) as {
+    scores: { med: number; food: number; sleep: number };
+    average: number;
+    levels: { med: string; food: string; sleep: string };
+    suggestions: { med: string; food: string; sleep: string };
+  };
+  console.log("[api] analyze response", json);
+  return json;
 }

@@ -1,62 +1,96 @@
 // src/pages/Results.tsx
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 export default function Results() {
-  const location = useLocation();
-  const { med, food, sleep, avg } = location.state ?? {};
+  const navigate = useNavigate();
+  const { state } = useLocation() as any;
 
-  const getColor = (score: number) => {
-    if (score <= 3) return "error";
-    if (score <= 6) return "warning";
-    return "success";
+  if (!state) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <div className="text-center">
+          <p className="mb-4">No results found.</p>
+          <button className="btn btn-primary" onClick={() => navigate("/")}>Go Home</button>
+        </div>
+      </div>
+    );
+  }
+
+  const { scores, average, levels, suggestions } = state;
+
+  const colorMap: Record<string, string> = {
+    red: "bg-red-500 text-white",
+    yellow: "bg-yellow-400 text-black",
+    green: "bg-green-500 text-white",
   };
 
-  const categories = [
-    { label: "Medication", score: med },
-    { label: "Food", score: food },
-    { label: "Sleep", score: sleep },
-  ];
+  function Section({ title, score, level, suggestion }: any) {
+    return (
+      <div className="card bg-base-200 shadow-xl p-5 mb-4">
+        <div className="flex justify-between items-center mb-2">
+          <h2 className="text-xl font-bold">{title}</h2>
+          <div className={`px-3 py-1 rounded text-sm ${colorMap[level]}`}>
+            {level.toUpperCase()}
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <p className="font-semibold mb-1">Score: {score}/10</p>
+          <progress
+            className="progress progress-primary w-full"
+            value={score * 10}
+            max={100}
+          ></progress>
+        </div>
+
+        <div>
+          <p className="font-semibold mb-1">Suggestion:</p>
+          <p className="opacity-80">{suggestion}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-base-100 p-8 text-base-content">
-      <div className="max-w-2xl mx-auto space-y-6">
-        <h1 className="text-3xl font-bold">Your Results</h1>
+    <div className="min-h-screen bg-base-100 p-6 flex flex-col items-center">
+      <div className="w-full max-w-2xl">
+        <h1 className="text-3xl font-bold mb-6 text-center">Your Daily Summary</h1>
 
-        {categories.map((c, i) => (
-          <div key={i} className="card bg-base-200 shadow">
-            <div className="card-body">
-              <div className="flex justify-between mb-2">
-                <span className="font-semibold">{c.label}</span>
-                <div className={`badge badge-${getColor(c.score)}`}>
-                  {c.score}/10
-                </div>
-              </div>
+        {/* Overall Score */}
+        <div className="card bg-base-300 shadow-xl p-5 mb-6">
+          <h2 className="text-xl font-bold text-center mb-2">Overall Score</h2>
+          <p className="text-4xl font-bold text-center mb-3">{average}/10</p>
+          <progress
+            className="progress progress-secondary w-full"
+            value={average * 10}
+            max={100}
+          ></progress>
+        </div>
 
-              <progress
-                className={`progress progress-${getColor(c.score)}`}
-                value={c.score}
-                max={10}
-              />
+        {/* Category Sections */}
+        <Section
+          title="Medication Adherence"
+          score={scores.med}
+          level={levels.med}
+          suggestion={suggestions.med}
+        />
+        <Section
+          title="Food / Nutrition"
+          score={scores.food}
+          level={levels.food}
+          suggestion={suggestions.food}
+        />
+        <Section
+          title="Sleep Quality"
+          score={scores.sleep}
+          level={levels.sleep}
+          suggestion={suggestions.sleep}
+        />
 
-              {/* Suggestions */}
-              <p className="text-sm opacity-75 mt-2">
-                {(() => {
-                  if (c.score <= 3)
-                    return "This area needs urgent improvement. Try to build better consistency.";
-                  if (c.score <= 6)
-                    return "You're doing okay, but you can improve with a few changes.";
-                  return "Great job! Keep maintaining your healthy habits.";
-                })()}
-              </p>
-            </div>
-          </div>
-        ))}
-
-        <div className="card bg-base-200 shadow">
-          <div className="card-body">
-            <h2 className="font-bold">Overall Score</h2>
-            <p className="text-xl">{avg.toFixed(1)}/10</p>
-          </div>
+        <div className="mt-6 flex justify-center">
+          <button className="btn btn-primary" onClick={() => navigate("/")}>
+            Start Over
+          </button>
         </div>
       </div>
     </div>
