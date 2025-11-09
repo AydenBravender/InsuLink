@@ -1,8 +1,9 @@
-pandas
-numpy
-scikit-learn
-tensorflow
-joblib
-kagglehub
-mne
-scipy
+numpy==1.24.3
+pandas==2.1.1
+scikit-learn==1.3.0
+tensorflow==2.14.0
+joblib==1.3.2
+scipy==1.11.3
+mat73==0.59
+requests==2.31.0
+tqdm==4.66.1
