@@ -9,7 +9,7 @@ with open("secret.json", "r") as f:
 
 API_KEY = config["roboflow_api_key"]
 MODEL_ID = config["model_id"]
-IMAGE_PATH = 'image.jpg'
+IMAGE_PATH = 'esp32_photos/capture.jpg'
 
 # -------------------------------
 # CREATE CLIENT
