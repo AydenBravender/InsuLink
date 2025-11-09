@@ -31,4 +31,5 @@ models
 *.venv
 models/*.gguf
 data_*
+secret.json
 
