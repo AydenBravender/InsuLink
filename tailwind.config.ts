@@ -1,9 +1,14 @@
+import daisyui from "daisyui";
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
-  darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
-  prefix: "",
+  content: [
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
+  ],
   theme: {
     container: {
       center: true,
@@ -74,20 +79,12 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
         },
       },
       animation: {
@@ -96,5 +93,28 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
-} satisfies Config;
+  
+  plugins: [tailwindcssAnimate, daisyui],
+
+  daisyui: {
+    themes: [
+      {
+        insulinkdark: {
+          ...require("daisyui/src/theming/themes")["night"],
+
+          primary: "#33A0DD",
+          "primary-content": "#ffffff",
+
+          secondary: "#E63B68",
+          "secondary-content": "#ffffff",
+
+          accent: "#33A0DD",
+
+          "base-100": "#0A0A0A",
+          "base-200": "#111111",
+          "base-300": "#1A1A1A",
+        },
+      },
+    ],
+  },
+} as unknown as Config;
