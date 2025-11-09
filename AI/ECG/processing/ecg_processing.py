@@ -1,86 +1,172 @@
-# ecg_processing.py
-
+import os
+import sys
 import time
+import signal
 import numpy as np
 import pandas as pd
-from scipy.signal import find_peaks
-import joblib
 from tensorflow.keras.models import load_model
+import joblib
+from sklearn.preprocessing import StandardScaler
 
-# === Constants ===
-CSV_FILE = "live_bioamp.csv"   # CSV being updated with BioAmp data
-SCALER_PATH = "ecg_scaler.pkl" # Saved scaler from training
-MODEL_PATH = "ecg_model.h5"    # Trained model
-BEAT_LENGTH = 188              # Number of samples per beat
-FS = 125                       # BioAmp sampling frequency
+# ------------------ CONFIG ------------------
+INPUT_CSV = "c:/Users/ahmad/Documents/Computer Science/Projects/InsuLink/AI/ECG/data_ecg/ecg_live.csv"
+OUTPUT_CSV = "c:/Users/ahmad/Documents/Computer Science/Projects/InsuLink/AI/Data/ecg_predictions.csv"
+START_ROW = 81000      # Row number to start processing from (0-based index)
+POLL_INTERVAL = 0.1    # seconds between checks for new data
+BATCH_SIZE = 32        # batch size for processing
 
-# === Load model + scaler ===
-scaler = joblib.load(SCALER_PATH)
-model = load_model(MODEL_PATH)
+TEST = False
 
-# Map numeric predictions to heartbeat classes
-CLASS_MAP = {
-    0: 'N',  # Normal
-    1: 'S',  # Supraventricular
-    2: 'V',  # Ventricular
-    3: 'F',  # Fusion
-    4: 'Q'   # Unknown
+ECG_CLASSES = {
+    0: 'N',  # Normal beat
+    1: 'S',  # Supraventricular premature beat
+    2: 'V',  # Ventricular premature beat
+    3: 'F',  # Fusion of ventricular and normal beat
+    4: 'Q'   # Unclassifiable beat
 }
 
-# === Functions ===
-def preprocess_beat(beat):
-    """Normalize and reshape a single beat to feed into the model"""
-    beat_scaled = scaler.transform(beat.reshape(1, -1))
-    return beat_scaled[..., np.newaxis]  # add channel dimension for Conv1D
+# ------------------ SIGNAL HANDLER ------------------
+def signal_handler(signum, frame):
+    print("\nStopping live prediction...")
+    sys.exit(0)
 
-def segment_beats(ecg_signal, fs=FS):
-    """Detect R-peaks and segment each beat"""
-    distance = int(0.6 * fs)  # minimum distance between peaks (~0.6s)
-    peaks, _ = find_peaks(ecg_signal, distance=distance, height=np.mean(ecg_signal))
+signal.signal(signal.SIGINT, signal_handler)
 
-    beats = []
-    half_len = BEAT_LENGTH // 2
-    for peak in peaks:
-        start = peak - half_len
-        end = peak + half_len
-        if start < 0:
-            beat = np.pad(ecg_signal[0:end], (abs(start), 0), 'constant')
-        elif end > len(ecg_signal):
-            beat = np.pad(ecg_signal[start:], (0, end - len(ecg_signal)), 'constant')
-        else:
-            beat = ecg_signal[start:end]
-        beats.append(beat)
-    return np.array(beats)
+# ------------------ LOAD MODEL ------------------
+MODEL_PATH = "AI/ECG/Models/ecg_model.h5"
+SCALER_PATH = "AI/ECG/Models/ecg_scaler.pkl"
 
-def get_live_beats(csv_file):
-    """Continuously read CSV and return preprocessed beats"""
-    last_rows = 0
-    while True:
+try:
+    model = load_model(MODEL_PATH)
+    print("Loaded Keras model from", MODEL_PATH)
+    n_classes = model.output_shape[1]
+    print(f"Model output shape: {model.output_shape} ({n_classes} classes)")
+except Exception as e:
+    print("Failed to load model:", e)
+    sys.exit(1)
+
+try:
+    scaler = joblib.load(SCALER_PATH)
+    print("Loaded scaler from", SCALER_PATH)
+except Exception:
+    print("Warning: Failed to load scaler")
+    scaler = None
+
+# ------------------ HELPERS ------------------
+def parse_features(row):
+    """Parse features from MIT-BIH CSV row format. Last column is class label, rest are features."""
+    if isinstance(row, pd.Series) and len(row) > 1:
+        return row.values[:-1]
+    return None
+
+def predict_row(features):
+    """Make prediction for a single row of features."""
+    if len(features) != 187:
+        print(f"Warning: Expected 187 features, got {len(features)}")
+        return None, None, None
+    X = features.reshape(1, 187)
+    if scaler is not None:
+        X = scaler.transform(X)
+    X = X.reshape((1, 187, 1))
+    probs = model.predict(X, verbose=0)
+    pred_class = int(np.argmax(probs[0]))
+    pred_label = ECG_CLASSES.get(pred_class, 'Unknown')
+    return pred_class, pred_label, probs[0]
+
+# ------------------ INITIALIZE OUTPUT CSV ------------------
+if not os.path.exists(OUTPUT_CSV):
+    pd.DataFrame(columns=['timestamp', 'features', 'predicted_class', 'class_label', 'class_probabilities']).to_csv(OUTPUT_CSV, index=False)
+    print(f"Created output CSV: {OUTPUT_CSV}")
+
+# Determine starting row
+try:
+    if os.path.exists(OUTPUT_CSV):
+        processed_rows = len(pd.read_csv(OUTPUT_CSV))
+        last_row = max(START_ROW, processed_rows)
+    else:
+        last_row = START_ROW
+except:
+    last_row = START_ROW
+
+print(f"\nStarting live prediction on {INPUT_CSV} from row {last_row}")
+print(f"Writing predictions to {OUTPUT_CSV}")
+print("\nClass meanings:")
+for idx, label in ECG_CLASSES.items():
+    print(f"{idx} ({label}): {['Normal beat', 'Supraventricular premature beat', 'Ventricular premature beat', 'Fusion of ventricular and normal', 'Unclassifiable beat'][idx]}")
+print("\nPress Ctrl+C to stop...\n")
+
+# ------------------ MAIN LOOP ------------------
+while True:
+    try:
+        if not os.path.exists(INPUT_CSV):
+            time.sleep(POLL_INTERVAL)
+            continue
+
         try:
-            df = pd.read_csv(csv_file, header=None)
-            if len(df) > last_rows:
-                new_data = df.iloc[last_rows:].values.flatten()
-                last_rows = len(df)
+            df = pd.read_csv(INPUT_CSV)
+        except Exception as e:
+            if 'No columns to parse from file' in str(e):
+                time.sleep(POLL_INTERVAL)
+                continue
+            raise
 
-                beats = segment_beats(new_data)
-                processed_beats = np.array([preprocess_beat(b) for b in beats])
-                if len(processed_beats) > 0:
-                    yield processed_beats
-            time.sleep(0.5)
-        except FileNotFoundError:
-            print(f"{csv_file} not found, waiting...")
-            time.sleep(1)
+        if df.shape[0] <= last_row:
+            time.sleep(POLL_INTERVAL)
+            continue
 
-def predict_beats(beats):
-    """Predict heartbeat classes for a batch of beats"""
-    predictions = model.predict(beats, verbose=0)
-    predicted_classes = np.argmax(predictions, axis=1)
-    return [CLASS_MAP[c] for c in predicted_classes]
+        # Process new rows
+        for idx in range(last_row, df.shape[0]):
+            if idx < START_ROW:
+                continue
 
-# === Main real-time loop ===
-if __name__ == "__main__":
-    print("🚀 Starting live ECG monitoring...")
-    for beats in get_live_beats(CSV_FILE):
-        classes = predict_beats(beats)
-        for i, cls in enumerate(classes):
-            print(f"Beat {i+1}: {cls}")
+            row = df.iloc[idx]
+            features = parse_features(row)
+            if features is None or len(features) < 10:
+                continue
+
+            pred_class, pred_label, probabilities = predict_row(features)
+            prob_str = {f"{ECG_CLASSES[i]}": f"{p:.3f}" for i, p in enumerate(probabilities)}
+
+            # Write prediction
+            out_row = pd.DataFrame({
+                'timestamp': [pd.Timestamp.now()],
+                'features': [';'.join(map(str, features))],
+                'predicted_class': [pred_class],
+                'class_label': [pred_label],
+                'class_probabilities': [str(prob_str)]
+            })
+            out_row.to_csv(OUTPUT_CSV, mode='a', header=False, index=False)
+
+            # True label if available
+            true_class = None
+            true_label = None
+            if len(row) > 1:
+                try:
+                    true_class = int(row.iloc[-1])
+                    true_label = ECG_CLASSES.get(true_class, 'Unknown')
+                except:
+                    pass
+
+            # Print
+            if TEST:
+                prediction_str = f"Row {idx}: Predicted: Class {pred_class} ({pred_label})"
+                if true_class is not None:
+                    prediction_str += f" | True: Class {true_class} ({true_label})"
+                    if pred_class == true_class:
+                        prediction_str += " ✓"
+                prediction_str += " - " + ", ".join(f"{label}: {prob:.3f}" for label, prob in 
+                                                sorted([(ECG_CLASSES[i], p) for i, p in enumerate(probabilities)]))
+            else:
+                prediction_str = true_class
+            print(prediction_str)
+
+        last_row = df.shape[0]
+
+    except KeyboardInterrupt:
+        print("\nStopping live prediction...")
+        break
+    except Exception as e:
+        print(f"Error: {e}")
+        time.sleep(POLL_INTERVAL)
+
+print("Live prediction stopped.")
