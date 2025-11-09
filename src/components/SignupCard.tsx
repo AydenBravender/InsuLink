@@ -33,7 +33,7 @@ export default function SignupCard() {
           gender: "",
           weight: "",
           height: "",
-          age: "",
+          age: ""
         };
   });
 
@@ -61,23 +61,22 @@ export default function SignupCard() {
   };
 
   const handleSubmit = () => {
-  // Extract ONLY the fields we want to persist (NO email, NO password)
-  const { firstName, lastName, gender, weight, height, age } = formData;
+    // Extract ONLY the fields we want to persist (NO email, NO password)
+    const { firstName, lastName, gender, weight, height, age } = formData;
 
-  // Save the user’s profile (used in AppShell for profile modal)
-  localStorage.setItem(
-    "insulinkProfile",
-    JSON.stringify({ firstName, lastName, gender, weight, height, age })
-  );
+    // Save the user’s profile (used in AppShell for profile modal)
+    localStorage.setItem(
+      "insulinkProfile",
+      JSON.stringify({ firstName, lastName, gender, weight, height, age })
+    );
 
-  // Clear temporary signup wizard data
-  localStorage.removeItem("signupFormData");
-  localStorage.removeItem("signupStep");
+    // Clear temporary signup wizard data
+    localStorage.removeItem("signupFormData");
+    localStorage.removeItem("signupStep");
 
-  // Redirect the user into the main app
-  navigate("/app");
-};
-
+    // Redirect the user into the main app
+    navigate("/app");
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center">
@@ -97,32 +96,33 @@ export default function SignupCard() {
             <legend className="fieldset-legend text-xl font-bold">
               Account Info
             </legend>
-
-            <label className="label mt-4">Email</label>
-            <input
-              type="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              className="input input-bordered w-full"
-              placeholder="Email"
-            />
-
-            <label className="label mt-4">Password</label>
+            {/* Email */}
+            <input className="input validator" type="email" required placeholder="name@gmail.com" />
+            {/* password */}
             <input
               type="password"
-              name="password"
-              value={formData.password}
-              onChange={handleChange}
-              className="input input-bordered w-full"
+              className="input validator"
+              required
               placeholder="Password"
+              minLength={8}
+              pattern="(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{8,}"
+              title="Must be more than 8 characters, including number, lowercase letter, uppercase letter"
             />
-
+            <p className="validator-hint">
+              Must be more than 8 characters, including
+              <br />
+              At least one number
+              <br />
+              At least one lowercase letter
+              <br />
+              At least one uppercase letter
+            </p>
+            
             <p className="text-sm text-gray-500 mt-2">
               Password must be at least 8 characters, include a number and a
               special character.
             </p>
-
+          {/* next button */}
             <div className="flex justify-end mt-6">
               <button className="btn btn-primary" onClick={nextStep}>
                 Next
