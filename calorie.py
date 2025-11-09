@@ -1,47 +1,61 @@
-# yolo_test_debug_single.py
-from ultralytics import YOLO
-import os
+# roboflow_food_inference.py
+from inference_sdk import InferenceHTTPClient
 
 # -------------------------------
 # CONFIGURATION
 # -------------------------------
-MODEL_PATH = 'models/bestcode.pt'       # Path to your trained model
-TEST_IMAGE = 'image.png'            # Your single test image
-OUTPUT_FOLDER = 'output_results'    # Where to save annotated image
-CONF_THRESHOLD = 0.1                # Low threshold to catch all detections
+API_KEY = "4CDUtK70o2NFxqVlUUAp"  # your Roboflow API key
+MODEL_ID = "food-4oq56/1"         # Roboflow model ID
+IMAGE_PATH = "image.jpg"           # image to test
 
 # -------------------------------
-# CREATE OUTPUT FOLDER IF NOT EXISTS
+# CREATE CLIENT
 # -------------------------------
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+client = InferenceHTTPClient(
+    api_url="https://serverless.roboflow.com",
+    api_key=API_KEY
+)
+
+calorie_list = [
+    ["Dhokla", 130],
+    ["Aloo Gobhi", 200],
+    ["Aloo Tikki", 87],
+    ["Apple", 52],
+    ["Banana", 90],
+    ["Beetroot", 43],
+    ["Boiled Egg", 155],
+    ["Bread", 80],
+    ["Brown Rice", 111],
+    ["Chapati", 120],
+    ["Chicken", 240],
+    ["Cucumber", 16],
+    ["Daal", 271],
+    ["Dosa", 168],
+    ["Rice", 130],
+    ["Smoothie", 300],
+    ["White Rice", 130]
+]
+
+# Convert list to dictionary for faster lookup
+calorie_dict = {name.lower(): cal for name, cal in calorie_list}
 
 # -------------------------------
-# LOAD MODEL
+# RUN INFERENCE
 # -------------------------------
-print(f"Loading YOLOv8 model from {MODEL_PATH}...")
-model = YOLO(MODEL_PATH)
+result = client.infer(IMAGE_PATH, model_id=MODEL_ID)
 
-# Print class names
-print("Model classes:", model.names)
+total_calories = 0
 
-# -------------------------------
-# RUN PREDICTION
-# -------------------------------
-print(f"Processing {TEST_IMAGE}...")
-results_list = model(TEST_IMAGE, conf=CONF_THRESHOLD)
+print("Predictions:")
+for pred in result['predictions']:
+    class_name = pred['class'].lower()
+    conf = pred['confidence']
+    x, y = pred.get('x'), pred.get('y')
+    w, h = pred.get('width'), pred.get('height')
 
-for i, result in enumerate(results_list):
-    # Print all detected boxes, classes, and confidence scores
-    if len(result.boxes) == 0:
-        print("No detections found")
-    else:
-        print("Detected boxes (xyxy):", result.boxes.xyxy)
-        print("Class IDs:", result.boxes.cls)
-        print("Confidence scores:", result.boxes.conf)
-    
-    # Save annotated image
-    save_path = os.path.join(OUTPUT_FOLDER, f"annotated_{os.path.basename(TEST_IMAGE)}")
-    result.save(save_path)
-    print(f"Annotated image saved to '{save_path}'")
+    calories = calorie_dict.get(class_name, 0)
+    total_calories += calories
 
-print("\nPrediction completed!")
+    print(f"Class: {class_name} | Confidence: {conf:.2f} | Calories: {calories} | Box: ({x}, {y}, {w}, {h})")
+
+print(f"\nTotal estimated calories in image: {total_calories}")
