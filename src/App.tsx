@@ -1,41 +1,29 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Login from "./pages/Login";
-import Index from "./pages/Index";
-import Home from "./pages/Home";
-import Chat from "./pages/Chat";
-import Routine from "./pages/Routine";
-import Notifications from "./pages/Notifications";
-import Sensors from "./pages/Sensors";
-import Layout from "./components/Layout";
-import NotFound from "./pages/NotFound";
+// src/App.tsx
 
-const queryClient = new QueryClient();
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route element={<Layout />}>
-            <Route path="/home" element={<Home />} />
-            <Route path="/chat" element={<Chat />} />
-            <Route path="/routine" element={<Routine />} />
-            <Route path="/notifications" element={<Notifications />} />
-            <Route path="/sensors" element={<Sensors />} />
-          </Route>
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import "./App.css";
+import Dashboard from "./pages/Dashboard";
+import Signup from "./pages/Signup"; // Import Signup page
+import AppShell from "./pages/AppShell.tsx";
+import Results from "./pages/Results.tsx";
+import SensorFeed from "./pages/SensorFeed.tsx";
+import Assistant from "./pages/Assistant.tsx";
+import IncidentDashboard from "./pages/IncidentDashboard.tsx";
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/app" element={<AppShell />} />
+        <Route path="/results" element={<Results />} />
+        <Route path="/sensorfeed" element={<SensorFeed />} />
+        <Route path="/assistant" element={<Assistant />} />
+        <Route path="/incidentdashboard" element={<IncidentDashboard />} />
+      </Routes>
+    </Router>
+  );
+}
 
 export default App;
