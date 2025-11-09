@@ -1,8 +1,8 @@
-// src/hooks/useRecorder.ts
 import { useEffect, useRef, useState } from "react";
 
 export function useRecorder(opts?: { autoStopSilenceMs?: number; threshold?: number }) {
   const [recording, setRecording] = useState(false);
+  const [volume, setVolume] = useState(0); // new live volume
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -15,13 +15,16 @@ export function useRecorder(opts?: { autoStopSilenceMs?: number; threshold?: num
 
   useEffect(() => {
     let raf: number;
+
     const tick = () => {
       const analyser = analyserRef.current;
       const mr = mediaRecorderRef.current;
       if (recording && analyser && mr) {
         const arr = new Float32Array(analyser.fftSize);
         analyser.getFloatTimeDomainData(arr);
+        // Compute RMS volume
         const rms = Math.sqrt(arr.reduce((s, v) => s + v * v, 0) / arr.length);
+        setVolume(rms); // live volume 0-1 (rough)
         const now = performance.now();
         if (rms > threshold) {
           lastAboveRef.current = now;
@@ -31,6 +34,7 @@ export function useRecorder(opts?: { autoStopSilenceMs?: number; threshold?: num
       }
       raf = requestAnimationFrame(tick);
     };
+
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [recording]);
@@ -51,9 +55,10 @@ export function useRecorder(opts?: { autoStopSilenceMs?: number; threshold?: num
       audioCtxRef.current?.close().catch(() => {});
       audioCtxRef.current = null;
       analyserRef.current = null;
+      setVolume(0);
     };
 
-    // analyser for silence detection
+    // analyser for live volume and silence detection
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const src = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
@@ -81,6 +86,7 @@ export function useRecorder(opts?: { autoStopSilenceMs?: number; threshold?: num
     mr.stop();
     await stopped;
     setRecording(false);
+    setVolume(0);
 
     const out = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
     chunksRef.current = [];
@@ -88,5 +94,5 @@ export function useRecorder(opts?: { autoStopSilenceMs?: number; threshold?: num
     return out;
   };
 
-  return { recording, startRecording, stopRecording };
+  return { recording, volume, startRecording, stopRecording };
 }

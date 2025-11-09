@@ -58,15 +58,6 @@ export default function Dial() {
           </button>
         </div>
 
-        <div className="flex items-center gap-2">
-          Questionnaire
-          <button
-            className="btn btn-lg btn-circle"
-            onClick={() => navigate("/questionnaire")}
-          >
-            <FileText className="w-6 h-6" />
-          </button>
-        </div>
       </div>
     </div>
   );

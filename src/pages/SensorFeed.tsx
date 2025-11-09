@@ -20,9 +20,9 @@ export default function SensorFeed() {
   return (
     <div className="min-h-screen bg-base-100 text-base-content p-8">
 			<Navbar />
-			<div className="mb-6 text-4xl font-bold tracking-wide shadow-2xl">
+			<text className="mb-6 text-4xl font-bold ">
 				Live Sensor Feed
-			</div>
+			</text>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
         <div className="card bg-base-200 p-4 shadow-lg">

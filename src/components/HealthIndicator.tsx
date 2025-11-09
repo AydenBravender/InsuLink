@@ -11,38 +11,38 @@ export default function HealthIndicator() {
   const healthColors = {
     good: "#22c55e",
     caution: "#f97316",
-    critical: "#ef4444",
+    critical: "#ef4444"
   };
 
   const strokeColors = {
     good: "#16a34a",
     caution: "#ea580c",
-    critical: "#dc2626",
+    critical: "#dc2626"
   };
 
   return (
     <div className="flex justify-center mt-12">
       <div className="flex flex-col items-center text-center">
         {/* Title */}
-        <div className="mb-6 text-4xl font-bold tracking-wide shadow-2xl">
-          Health Indicator
-        </div>
+        <text className="mb-6 text-4xl font-bold ">Health Indicator</text>
 
         {/* Main Health Circle */}
         <div
           className="relative w-64 h-64 rounded-full flex items-center justify-center overflow-visible mt-5"
-          style={{
-            backgroundColor: "#0f172a", // dark background
-            "--health-color": healthColors[healthStatus],
-            boxShadow: `
+          style={
+            {
+              backgroundColor: "#0f172a", // dark background
+              "--health-color": healthColors[healthStatus],
+              boxShadow: `
               0 0 25px ${healthColors[healthStatus]},
               0 0 50px ${healthColors[healthStatus]}
             `,
-            animation:
-              healthStatus !== "good"
-                ? "pulseGlow 2.5s infinite ease-in-out"
-                : "none",
-          } as React.CSSProperties}
+              animation:
+                healthStatus !== "good"
+                  ? "pulseGlow 2.5s infinite ease-in-out"
+                  : "none"
+            } as React.CSSProperties
+          }
         >
           {/* Rotating Glow Ring (for "good" status) */}
           {healthStatus === "good" && (
@@ -51,7 +51,7 @@ export default function HealthIndicator() {
               style={{
                 borderColor: `${healthColors.good} transparent transparent transparent`,
                 animation: "spinGlow 3s linear infinite",
-                filter: `drop-shadow(0 0 10px ${healthColors.good})`,
+                filter: `drop-shadow(0 0 10px ${healthColors.good})`
               }}
             />
           )}
@@ -67,7 +67,7 @@ export default function HealthIndicator() {
                 0 0 8px var(--health-color),
                 0 0 16px rgba(255,255,255,0.2)
               `,
-              letterSpacing: "1px",
+              letterSpacing: "1px"
             }}
           >
             {healthStatus}
@@ -77,7 +77,7 @@ export default function HealthIndicator() {
           <div
             className="absolute inset-0 rounded-full opacity-30 blur-2xl"
             style={{
-              backgroundColor: healthColors[healthStatus],
+              backgroundColor: healthColors[healthStatus]
             }}
           />
         </div>
