@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Activity, Cpu, AlertTriangle, FileText, Zap } from "lucide-react";
+import { Activity, Cpu, AlertTriangle, Zap } from "lucide-react";
 
 export default function Dial() {
   const navigate = useNavigate();
