@@ -1,12 +1,15 @@
-# roboflow_food_inference.py
+import json
 from inference_sdk import InferenceHTTPClient
 
 # -------------------------------
-# CONFIGURATION
+# LOAD CONFIG
 # -------------------------------
-API_KEY = "4CDUtK70o2NFxqVlUUAp"  # your Roboflow API key
-MODEL_ID = "food-4oq56/1"         # Roboflow model ID
-IMAGE_PATH = "image.jpg"           # image to test
+with open("secret.json", "r") as f:
+    config = json.load(f)
+
+API_KEY = config["roboflow_api_key"]
+MODEL_ID = config["model_id"]
+IMAGE_PATH = 'image.jpg'
 
 # -------------------------------
 # CREATE CLIENT
@@ -16,6 +19,9 @@ client = InferenceHTTPClient(
     api_key=API_KEY
 )
 
+# -------------------------------
+# CALORIE DATA
+# -------------------------------
 calorie_list = [
     ["Dhokla", 130],
     ["Aloo Gobhi", 200],
