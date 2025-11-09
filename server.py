@@ -1,210 +1,224 @@
-from fastapi import FastAPI, UploadFile, File, Body
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import uvicorn
-import io
-import os
+"""FastAPI server for InsuLink.
+
+Uses Groq Whisper for transcription and Groq Llama3 for analysis.
+"""
+
+import base64
 import json
-from groq import Groq
+import os
+import re
+from typing import Dict, List, Tuple
+
 from dotenv import load_dotenv
-from starlette.responses import Response
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from groq import Groq
+from pydantic import BaseModel
 
-# ------------------------------------------------------------
-# InsuLink FastAPI server (Python 3.10 compatible)
-#
-# Create Python 3.10 venv:
-#   py -3.10 -m venv venv
-#   venv\Scripts\activate
-#   pip install -r requirements.txt
-# ------------------------------------------------------------
 
-load_dotenv()  # Load variables from .env if present
+print("[server] Server.py loaded ✅")
+# ---------------------------
+# Env & client
+# ---------------------------
+load_dotenv()
 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    print("[server] WARNING: GROQ_API_KEY is missing. /analyze and /transcribe will fail.")
+else:
+    print("[server] GROQ_API_KEY loaded ✅")
+
+client = Groq(api_key=GROQ_API_KEY)
+
+# ---------------------------
+# FastAPI app & CORS
+# ---------------------------
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # front-end dev server on 5173
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {"ok": True}
 
-# Initialize Groq client using env var. Set GROQ_API_KEY in your environment.
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
-groq_client = Groq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
-print(f"[server] GROQ_API_KEY set: {bool(GROQ_API_KEY)}")
-
-
-class QAItem(BaseModel):
-    category: str  # "med" | "food" | "sleep"
-    text: str
-
+# ---------------------------
+# Question bank (9 total)
+# ---------------------------
+QUESTIONS: Dict[str, List[str]] = {
+    "med": [
+        "Did you take all prescribed diabetes meds or insulin today?",
+        "At what times did you take them?",
+        "Have you felt symptoms of high or low blood sugar today?",
+    ],
+    "food": [
+        "What did you eat for breakfast?",
+        "What did you eat for lunch and dinner?",
+        "How many sugary drinks or desserts did you have?",
+    ],
+    "sleep": [
+        "What time did you go to bed and wake up?",
+        "Roughly how many hours did you sleep?",
+        "How rested do you feel on a 1–10 scale?",
+    ],
+}
 
 class AnalyzeRequest(BaseModel):
-    answers: list[QAItem]
+    answers: Dict[str, List[str]]  # { "med": [...3], "food": [...3], "sleep": [...3] }
 
+class AnalyzeResponse(BaseModel):
+    scores: Dict[str, int]         # { "med": 1..10, "food": 1..10, "sleep": 1..10 }
+    average: float                 # mean of 3
+    levels: Dict[str, str]         # "red" | "yellow" | "green"
+    suggestions: Dict[str, str]    # text suggestions per category
 
-@app.get("/questions")
-def get_questions():
-    """
-    Return 9 total questions with id, category, and text.
-    Frontend will shuffle and present them.
-    """
-    questions = [
-        {"id": "med1", "category": "med", "text": "Did you take all prescribed medication today?"},
-        {"id": "med2", "category": "med", "text": "Have you missed any insulin doses in the last 3 days?"},
-        {"id": "med3", "category": "med", "text": "Are you following your insulin timing as prescribed?"},
-        {"id": "food1", "category": "food", "text": "What did you eat most recently, and about how many carbs was it?"},
-        {"id": "food2", "category": "food", "text": "Did you snack between meals today?"},
-        {"id": "food3", "category": "food", "text": "Were your meals balanced with protein, carbs, and fiber today?"},
-        {"id": "sleep1", "category": "sleep", "text": "How many hours did you sleep last night?"},
-        {"id": "sleep2", "category": "sleep", "text": "Did you wake up during the night or have trouble falling asleep?"},
-        {"id": "sleep3", "category": "sleep", "text": "Do you feel rested right now?"},
-    ]
-    return {"questions": questions}
+# ---------------------------
+# Utility: bucket + suggestions
+# ---------------------------
+def bucket_and_suggest(score: int, category: str) -> Tuple[str, str]:
+    if 1 <= score <= 3:
+        level = "red"
+    elif 4 <= score <= 6:
+        level = "yellow"
+    else:
+        level = "green"
 
-
-@app.post("/tts")
-async def tts(text: dict = Body(...)):
-    """
-    Text-to-speech using Groq if available, else fall back to gTTS.
-    Returns MP3 bytes with content-type audio/mpeg.
-    """
-    input_text = (text or {}).get("text", "").strip()
-    if not input_text:
-        return Response(content=b"", media_type="audio/mpeg")
-
-    # Try Groq TTS if supported by the current client version (OpenAI-compatible API)
-    if groq_client is not None:
-        try:
-            # Some Groq client versions support an OpenAI-compatible TTS API.
-            # If not supported, the call will raise and we'll fall back to gTTS.
-            create = getattr(getattr(getattr(groq_client, "audio", None), "speech", None), "with_streaming_response", None)
-            if create is not None:
-                with groq_client.audio.speech.with_streaming_response.create(
-                    model="gpt-4o-mini-tts",
-                    voice="verse",
-                    input=input_text,
-                    format="mp3",
-                ) as resp:
-                    mp3_bytes = resp.read()
-                    return Response(content=mp3_bytes, media_type="audio/mpeg")
-        except Exception:
-            # Fall back to gTTS below
-            pass
-
-    # Fallback: gTTS
-    try:
-        from gtts import gTTS
-        import tempfile
-
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=True) as tmp:
-            gTTS(text=input_text, lang="en").save(tmp.name)
-            tmp.seek(0)
-            data = tmp.read()
-            return Response(content=data, media_type="audio/mpeg")
-    except Exception:
-        # As a very last resort return silence
-        return Response(content=b"", media_type="audio/mpeg")
-
-
-@app.post("/transcribe")
-async def transcribe_audio(file: UploadFile = File(...)):
-    """
-    Transcribe uploaded audio using Groq Whisper.
-    Accepts any typical audio/wav or audio/mpeg file.
-    Returns {"text": "..."}
-    """
-    content = await file.read()
-
-    text_result = ""
-    if groq_client is not None:
-        try:
-            # OpenAI-compatible transcription call
-            name = getattr(file, "filename", "audio.wav") or "audio.wav"
-            resp = groq_client.audio.transcriptions.create(
-                model="whisper-large-v3",
-                file=(name, content),
-            )
-            # Some SDKs return an object with .text, some have a dict
-            text_result = getattr(resp, "text", None) or (resp.get("text") if isinstance(resp, dict) else "")
-        except Exception:
-            text_result = ""
-
-    return {"text": (text_result or "").strip()}
-
-
-def _suggestion_for(score: int) -> str:
-    if score <= 3:
-        return "This area needs urgent improvement. Aim for more consistency and support."
-    if score <= 6:
-        return "You're doing okay, but a few changes could help a lot."
-    return "Great job! Keep up your healthy habits."
-
-
-@app.post("/analyze")
-async def analyze(req: AnalyzeRequest):
-    """
-    Score med/food/sleep 1–10 using Groq LLM, then add suggestions and overall average.
-    """
-    # Build a compact, structured prompt
-    answers_by_cat = {"med": [], "food": [], "sleep": []}
-    for a in req.answers:
-        cat = a.category if a.category in ("med", "food", "sleep") else "other"
-        if cat in answers_by_cat:
-            answers_by_cat[cat].append(a.text)
-
-    prompt = (
-        "You are a diabetes wellness evaluator. Read the user's answers and "
-        "score each category from 1 to 10, integers only. Return valid JSON only with keys med, food, sleep.\n\n"
-        f"Medication answers: {answers_by_cat['med']}\n"
-        f"Food answers: {answers_by_cat['food']}\n"
-        f"Sleep answers: {answers_by_cat['sleep']}\n\n"
-        "Return JSON ONLY like {\"med\": 7, \"food\": 5, \"sleep\": 8}. No extra text."
-    )
-
-    med = food = sleep = 5
-    source = "fallback"
-    if groq_client is not None:
-        try:
-            chat = groq_client.chat.completions.create(
-                model="llama3-70b-8192",
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.2,
-            )
-            content = chat.choices[0].message.content  # type: ignore[attr-defined]
-            parsed = json.loads(content)
-            med = int(parsed.get("med", med))
-            food = int(parsed.get("food", food))
-            sleep = int(parsed.get("sleep", sleep))
-            source = "groq"
-        except Exception:
-            # Use defaults if parsing fails
-            med = food = sleep = 5
-            source = "fallback"
-
-    # Clamp values 1–10
-    med = max(1, min(10, med))
-    food = max(1, min(10, food))
-    sleep = max(1, min(10, sleep))
-
-    avg = (med + food + sleep) / 3.0
-    return {
-        "med": med,
-        "food": food,
-        "sleep": sleep,
-        "avg": avg,
-        "source": source,
-        "suggestions": {
-            "med": _suggestion_for(med),
-            "food": _suggestion_for(food),
-            "sleep": _suggestion_for(sleep),
+    BANK = {
+        "med": {
+            "red":   "You’re missing doses or timing. Set reminders and talk with your provider about barriers.",
+            "yellow":"Good consistency—tighten timing windows and log doses to spot patterns.",
+            "green": "Great adherence—keep logging and follow your plan.",
+        },
+        "food": {
+            "red":   "Reduce sugary drinks and refined carbs; add fiber and lean protein to each meal.",
+            "yellow":"Portions are okay—tweak snacks and reduce late-night eating.",
+            "green": "Balanced intake—keep hydration and regular meals.",
+        },
+        "sleep": {
+            "red":   "Aim for a stable schedule and a dark, cool room; cut screens before bed.",
+            "yellow":"You’re close—try consistent bed/wake times and brief daytime light exposure.",
+            "green": "Solid routine—maintain consistency and wind-down habits.",
         },
     }
+    return level, BANK[category][level]
 
+# ---------------------------
+# Routes
+# ---------------------------
+@app.get("/questions")
+def get_questions():
+    return {"questions": QUESTIONS}
 
-if __name__ == "__main__":
-    # Uvicorn compatible with Python 3.10
-    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
+@app.post("/tts")
+async def tts(text: str = Form(None)):  # accept but not required
+    # Generate ~0.5s of silence as PCM WAV (8kHz, mono, 16-bit)
+    sample_rate = 8000
+    duration_s = 0.5
+    num_samples = int(sample_rate * duration_s)
+    n_channels = 1
+    bits_per_sample = 16
+    byte_rate = sample_rate * n_channels * (bits_per_sample // 8)
+    block_align = n_channels * (bits_per_sample // 8)
+    data_size = num_samples * block_align
+    chunk_size = 36 + data_size
+
+    header = (
+        b"RIFF"
+        + chunk_size.to_bytes(4, "little")
+        + b"WAVE"
+        + b"fmt "
+        + (16).to_bytes(4, "little")
+        + (1).to_bytes(2, "little")  # PCM
+        + n_channels.to_bytes(2, "little")
+        + sample_rate.to_bytes(4, "little")
+        + byte_rate.to_bytes(4, "little")
+        + block_align.to_bytes(2, "little")
+        + bits_per_sample.to_bytes(2, "little")
+        + b"data"
+        + data_size.to_bytes(4, "little")
+    )
+    wav_bytes = header + (b"\x00" * data_size)
+    b64 = base64.b64encode(wav_bytes).decode("utf-8")
+    return {"audioUrl": f"data:audio/wav;base64,{b64}"}
+
+@app.post("/transcribe")
+async def transcribe(file: UploadFile = File(...)):
+    data = await file.read()
+    filename = file.filename or "audio.webm"
+    content_type = file.content_type or "audio/webm"
+
+    try:
+        tr = client.audio.transcriptions.create(
+            model="whisper-large-v3",
+            file=(filename, data, content_type),
+        )
+        return {"text": tr.text}
+    except Exception as e:
+        print("[/transcribe] ERROR:", repr(e))
+        return {"text": ""}
+
+@app.post("/analyze", response_model=AnalyzeResponse)
+async def analyze(req: AnalyzeRequest):
+    system = (
+        "You are a clinician assistant for a diabetes check-in. "
+        "Given 3 categories (medication, food, sleep) and 3 short answers per category, "
+        "rate each category from 1-10 strictly as an integer; DO NOT average them yourself. "
+        "Return ONLY strict JSON of the form: "
+        '{"scores":{"med":<int>,"food":<int>,"sleep":<int>}} with no commentary.'
+    )
+
+    user = {
+        "med": req.answers.get("med", []),
+        "food": req.answers.get("food", []),
+        "sleep": req.answers.get("sleep", []),
+    }
+
+    try:
+        chat = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            temperature=0,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": json.dumps(user)},
+            ],
+        )
+        raw = chat.choices[0].message.content.strip()
+    except Exception as e:
+        print("[/analyze] ERROR calling Groq:", repr(e))
+        raw = ""
+
+    print("----- RAW MODEL OUTPUT -----")
+    print(raw)
+    print("----- USER ANSWERS SENT INTO MODEL -----")
+    print(user)
+    print("-----------------------------")
+
+    # Parse robustly
+    try:
+        m = re.search(r"\{.*\}", raw, re.S)
+        payload = json.loads(m.group(0)) if m else {}
+    except Exception:
+        payload = {"scores": {"med": 5, "food": 5, "sleep": 5}}
+
+    scores = payload.get("scores", {"med": 5, "food": 5, "sleep": 5})
+    med_s, food_s, sleep_s = int(scores.get("med", 5)), int(scores.get("food", 5)), int(scores.get("sleep", 5))
+    avg = round((med_s + food_s + sleep_s) / 3, 1)
+
+    med_level, med_sugg = bucket_and_suggest(med_s, "med")
+    food_level, food_sugg = bucket_and_suggest(food_s, "food")
+    sleep_level, sleep_sugg = bucket_and_suggest(sleep_s, "sleep")
+
+    return AnalyzeResponse(
+        scores={"med": med_s, "food": food_s, "sleep": sleep_s},
+        average=avg,
+        levels={"med": med_level, "food": food_level, "sleep": sleep_level},
+        suggestions={"med": med_sugg, "food": food_sugg, "sleep": sleep_sugg},
+    )

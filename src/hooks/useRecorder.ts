@@ -1,113 +1,92 @@
 // src/hooks/useRecorder.ts
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-export function useRecorder() {
+export function useRecorder(opts?: { autoStopSilenceMs?: number; threshold?: number }) {
   const [recording, setRecording] = useState(false);
-  const [interim, setInterim] = useState("");
-  const [finalText, setFinalText] = useState("");
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const srRef = useRef<any>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const lastAboveRef = useRef<number>(0);
 
-  const startSR = () => {
-    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-    try {
-      const rec = new SR();
-      rec.lang = "en-US";
-      rec.continuous = true;
-      rec.interimResults = true;
-      rec.onresult = (e: any) => {
-        let interimLocal = "";
-        let finalLocal = "";
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const r = e.results[i];
-          if (r.isFinal) finalLocal += r[0].transcript;
-          else interimLocal += r[0].transcript;
+  const autoStopMs = opts?.autoStopSilenceMs ?? 1400;
+  const threshold = opts?.threshold ?? 0.01;
+
+  useEffect(() => {
+    let raf: number;
+    const tick = () => {
+      const analyser = analyserRef.current;
+      const mr = mediaRecorderRef.current;
+      if (recording && analyser && mr) {
+        const arr = new Float32Array(analyser.fftSize);
+        analyser.getFloatTimeDomainData(arr);
+        const rms = Math.sqrt(arr.reduce((s, v) => s + v * v, 0) / arr.length);
+        const now = performance.now();
+        if (rms > threshold) {
+          lastAboveRef.current = now;
+        } else if (now - lastAboveRef.current > autoStopMs) {
+          stopRecording(); // auto stop after silence
         }
-        setInterim(interimLocal);
-        if (finalLocal) setFinalText((prev) => (prev + " " + finalLocal).trim());
-      };
-      rec.onerror = () => {};
-      rec.onend = () => {};
-      rec.start();
-      srRef.current = rec;
-    } catch {
-      // no-op
-    }
-  };
-
-  const stopSR = () => {
-    try {
-      srRef.current?.stop();
-    } catch {}
-    srRef.current = null;
-  };
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [recording]);
 
   const startRecording = async () => {
-    setInterim("");
-    setFinalText("");
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
     const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
       ? "audio/webm;codecs=opus"
-      : MediaRecorder.isTypeSupported("audio/webm")
-      ? "audio/webm"
-      : "";
-
-    const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      : "audio/webm";
+    const mr = new MediaRecorder(stream, { mimeType: mime });
 
     chunksRef.current = [];
-
-    mr.ondataavailable = (e) => {
+    mr.ondataavailable = function (this: MediaRecorder, e: BlobEvent) {
       if (e.data && e.data.size > 0) chunksRef.current.push(e.data);
     };
-
-    mr.onstop = function () {
+    mr.onstop = function (this: MediaRecorder) {
       stream.getTracks().forEach((t) => t.stop());
+      audioCtxRef.current?.close().catch(() => {});
+      audioCtxRef.current = null;
+      analyserRef.current = null;
     };
 
+    // analyser for silence detection
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const src = ctx.createMediaStreamSource(stream);
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    src.connect(analyser);
+
+    audioCtxRef.current = ctx;
+    analyserRef.current = analyser;
+    lastAboveRef.current = performance.now();
+
     mediaRecorderRef.current = mr;
-    startSR();
     mr.start();
     setRecording(true);
   };
 
   const stopRecording = async (): Promise<Blob> => {
-    stopSR();
     const mr = mediaRecorderRef.current;
     if (!mr) return new Blob([], { type: "audio/webm" });
 
     const stopped = new Promise<void>((resolve) => {
-      const prev = mr.onstop;
-      mr.onstop = function (this: MediaRecorder, ev: Event) {
-        if (prev) prev.call(this, ev);
-        resolve();
-      };
+      const handler = () => resolve();
+      mr.addEventListener("stop", handler as EventListener, { once: true });
     });
 
     mr.stop();
     await stopped;
-
     setRecording(false);
 
-    const blob = new Blob(chunksRef.current, {
-      type: mr.mimeType || "audio/webm",
-    });
-
+    const out = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
     chunksRef.current = [];
     mediaRecorderRef.current = null;
-
-    return blob;
+    return out;
   };
 
-  return {
-    recording,
-    interim,
-    finalText,
-    startRecording,
-    stopRecording,
-  };
+  return { recording, startRecording, stopRecording };
 }
-

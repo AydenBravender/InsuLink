@@ -1,164 +1,168 @@
-import { useEffect, useState } from "react";
-import {
-  analyzeAnswers,
-  getQuestions,
-  ttsSpeak,
-  transcribeAudio,
-  type Question,
-  type QAAnswer,
-  type Category,
-} from "../lib/api";
+// src/pages/Questionnaire.tsx
+import { useEffect, useMemo, useState } from "react";
+import { getQuestions, ttsSpeak, transcribeAudio, analyzeAnswers } from "../lib/api";
 import { useRecorder } from "../hooks/useRecorder";
 import { useNavigate } from "react-router-dom";
 
+type Bank = { med: string[]; food: string[]; sleep: string[] };
+type Item = { cat: "med" | "food" | "sleep"; text: string };
+
 export default function Questionnaire() {
   const navigate = useNavigate();
-  const { recording, interim, finalText, startRecording, stopRecording } = useRecorder();
+  const { recording, startRecording, stopRecording } = useRecorder({
+    autoStopSilenceMs: 1400,
+    threshold: 0.01,
+  });
 
-  const [questions, setQuestions] = useState<Question[] | null>(null);
-  const [queue, setQueue] = useState<Question[]>([]);
+  const [bank, setBank] = useState<Bank | null>(null);
+  const [queue, setQueue] = useState<Item[]>([]);
   const [idx, setIdx] = useState(0);
-  const [answers, setAnswers] = useState<QAAnswer[]>([]);
+  const [display, setDisplay] = useState("");
+  const [transcript, setTranscript] = useState("");
+  const [answers, setAnswers] = useState<{ med: string[]; food: string[]; sleep: string[] }>({
+    med: [],
+    food: [],
+    sleep: [],
+  });
   const [loading, setLoading] = useState(false);
-  const [canProceed, setCanProceed] = useState(false);
-  const [typed, setTyped] = useState("");
 
-  // Load questions
+  // load questions
   useEffect(() => {
     (async () => {
-      const res = await getQuestions();
-      setQuestions(res.questions);
+      const { questions } = await getQuestions();
+      setBank(questions);
     })();
   }, []);
 
-  // Shuffle questions
-  useEffect(() => {
-    if (!questions) return;
-    const shuffled = [...questions].sort(() => Math.random() - 0.5);
-    setQueue(shuffled);
-    setIdx(0);
-    setAnswers([]);
-    setCanProceed(false);
-  }, [questions]);
+  // build 9 items & shuffle once
+  const shuffled: Item[] = useMemo(() => {
+    if (!bank) return [];
+    const items: Item[] = [
+      ...bank.med.map((t) => ({ cat: "med" as const, text: t })),
+      ...bank.food.map((t) => ({ cat: "food" as const, text: t })),
+      ...bank.sleep.map((t) => ({ cat: "sleep" as const, text: t })),
+    ];
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+    return items;
+  }, [bank]);
 
-  const current = queue[idx];
-
-  // Typewriter effect for current question
   useEffect(() => {
-    if (!current) return;
-    setCanProceed(false);
-    setTyped("");
+    if (shuffled.length) setQueue(shuffled);
+  }, [shuffled]);
+
+  // typewriter + TTS when question changes
+  useEffect(() => {
+    if (!queue.length) return;
+    const q = queue[idx]?.text ?? "";
+    setDisplay("");
+    setTranscript("");
 
     let i = 0;
-    const interval = setInterval(() => {
+    const timer = setInterval(() => {
+      setDisplay(q.slice(0, i));
       i++;
-      setTyped(current.text.slice(0, i));
-      if (i >= current.text.length) clearInterval(interval);
-    }, 25);
+      if (i > q.length) {
+        clearInterval(timer);
+        // speak after typed
+        ttsSpeak(q).then((url) => new Audio(url).play());
+      }
+    }, 18);
 
-    return () => clearInterval(interval);
-  }, [current]);
+    return () => clearInterval(timer);
+  }, [queue, idx]);
 
-  const handleStart = async () => {
-    try {
-      const url = await ttsSpeak(current.text);
-      const audio = new Audio(url);
-      await audio.play();
-      await new Promise<void>((resolve) =>
-        audio.addEventListener("ended", () => resolve(), { once: true })
-      );
-    } catch {}
+  const onStart = async () => {
     await startRecording();
   };
 
-  const handleStop = async () => {
+  const onStop = async () => {
     const blob = await stopRecording();
     const { text } = await transcribeAudio(blob);
-    const transcript = (text || "").trim();
-    const ans: QAAnswer = { category: current.category as Category, text: transcript };
-    setAnswers((prev) => {
-      const next = [...prev];
-      next[idx] = ans;
-      return next;
-    });
-    setCanProceed(true);
+    setTranscript(text);
   };
 
-  const handleNext = async () => {
-    if (!canProceed) return;
+  const onNext = async () => {
+    const cat = queue[idx].cat;
+
+    // Build the NEW answers object first (avoid stale state)
+    const nextAnswers = {
+      ...answers,
+      [cat]: [...answers[cat], transcript || ""],
+    };
+
+    setAnswers(nextAnswers);
+    setTranscript("");
+
     if (idx < queue.length - 1) {
-      setIdx((n) => n + 1);
-      setCanProceed(false);
+      setIdx((x) => x + 1);
     } else {
       setLoading(true);
-      const filled: QAAnswer[] = queue.map((q, i) =>
-        answers[i] ?? { category: q.category as Category, text: "" }
-      );
-      const result = await analyzeAnswers(filled);
-      navigate("/results", { state: result });
+      try {
+        console.log("[ui] final answers", nextAnswers);
+        const result = await analyzeAnswers(nextAnswers);
+        navigate("/results", { state: result });
+      } catch (e) {
+        console.error("[ui] analyze error", e);
+        alert("Sorry, analyzing failed. Check the server logs.");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
-  if (!current) {
+  if (!queue.length) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-xl">
-        Loading questions...
+      <div className="min-h-screen grid place-items-center text-lg">
+        Loading questions…
       </div>
     );
   }
 
+  const progress = Math.round(((idx + 1) / queue.length) * 100);
+
   return (
-    <div className="min-h-screen bg-base-100 text-base-content flex flex-col items-center p-8">
-      <div className="w-full max-w-2xl card bg-base-200 shadow-xl p-8">
-        <h1 className="text-2xl font-bold mb-2">
-          Question {idx + 1} of {queue.length}
-        </h1>
-
-        <p className="text-lg mb-4">{typed}</p>
-
-        {/* live transcription */}
-        <div className="min-h-[60px] text-sm opacity-80">
-          {recording ? (
-            <span className="italic">Listening… {interim}</span>
-          ) : (
-            <span>{finalText}</span>
-          )}
+    <div className="min-h-screen bg-base-100 text-base-content flex flex-col items-center p-6">
+      <div className="w-full max-w-2xl card bg-base-200 shadow-xl p-6">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-xl font-bold">Question {idx + 1} of {queue.length}</h1>
+          <progress className="progress progress-primary w-40" value={progress} max={100}></progress>
         </div>
 
-        {/* mic animation */}
-        <div className="flex justify-center my-6">
+        <p className="text-lg min-h-[84px] mb-4">{display}</p>
+
+        {/* simple mic bars */}
+        <div className="flex justify-center mb-4">
           <div className="flex space-x-1">
-            {[...Array(20)].map((_, i) => (
-              <div
-                key={i}
-                className={`w-1 rounded-full bg-primary transition-all duration-300 ${
-                  recording ? "h-12" : "h-4"
-                }`}
-              />
+            {new Array(20).fill(0).map((_, i) => (
+              <div key={i} className={`w-1 rounded bg-primary transition-all ${recording ? "h-10" : "h-4"}`} />
             ))}
           </div>
         </div>
 
         <div className="flex gap-3">
-          <button
-            className="btn btn-accent"
-            disabled={recording}
-            onClick={handleStart}
-          >
-            Start
+          <button className="btn btn-secondary" disabled={recording} onClick={onStart}>
+            Start Recording
           </button>
-
-          <button className="btn-accent" disabled={!recording} onClick={handleStop}>
-            Stop
+          <button className="btn btn-primary" disabled={!recording} onClick={onStop}>
+            Done Speaking
           </button>
-
-          <button className="btn btn-primary" disabled={!canProceed} onClick={handleNext}>
+          <button className="btn" disabled={!transcript} onClick={onNext}>
             Next
           </button>
         </div>
+
+        {transcript && (
+          <div className="mt-4 p-3 rounded bg-base-300">
+            <div className="text-xs opacity-70 mb-1">Your answer</div>
+            <div>{transcript}</div>
+          </div>
+        )}
       </div>
 
-      {loading && <div className="mt-8 text-xl animate-pulse">Analyzing…</div>}
+      {loading && <div className="mt-6 text-lg animate-pulse">Analyzing your answers…</div>}
     </div>
   );
 }
