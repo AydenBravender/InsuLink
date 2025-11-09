@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import InsuLinkLogo from "../assets/InsuLinkLogo.png";
 
 type FormData = {
@@ -36,6 +37,7 @@ export default function SignupCard() {
         };
   });
 
+  const navigate = useNavigate();
   const [progress, setProgress] = useState(33);
 
   useEffect(() => {
@@ -59,10 +61,23 @@ export default function SignupCard() {
   };
 
   const handleSubmit = () => {
-    console.log("Form submitted:", formData);
-    localStorage.removeItem("signupFormData");
-    localStorage.removeItem("signupStep");
-  };
+  // Extract ONLY the fields we want to persist (NO email, NO password)
+  const { firstName, lastName, gender, weight, height, age } = formData;
+
+  // Save the user’s profile (used in AppShell for profile modal)
+  localStorage.setItem(
+    "insulinkProfile",
+    JSON.stringify({ firstName, lastName, gender, weight, height, age })
+  );
+
+  // Clear temporary signup wizard data
+  localStorage.removeItem("signupFormData");
+  localStorage.removeItem("signupStep");
+
+  // Redirect the user into the main app
+  navigate("/app");
+};
+
 
   return (
     <div className="min-h-screen flex items-center justify-center">

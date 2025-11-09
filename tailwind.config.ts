@@ -95,4 +95,26 @@ export default {
   },
   
   plugins: [tailwindcssAnimate, daisyui],
+
+  daisyui: {
+    themes: [
+      {
+        insulinkdark: {
+          ...require("daisyui/src/theming/themes")["night"],
+
+          primary: "#33A0DD",
+          "primary-content": "#ffffff",
+
+          secondary: "#E63B68",
+          "secondary-content": "#ffffff",
+
+          accent: "#33A0DD",
+
+          "base-100": "#0A0A0A",
+          "base-200": "#111111",
+          "base-300": "#1A1A1A",
+        },
+      },
+    ],
+  },
 } as unknown as Config;
