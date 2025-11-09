@@ -19,9 +19,8 @@ if not os.path.exists(SAVE_FOLDER):
 try:
     response = requests.get(CAPTURE_URL, timeout=5)
     if response.status_code == 200:
-        # Save with timestamp to avoid overwriting
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filepath = os.path.join(SAVE_FOLDER, f"capture_{timestamp}.jpg")
+        # Always save with the same filename (overwrite each time)
+        filepath = os.path.join(SAVE_FOLDER, "capture.jpg")
         with open(filepath, "wb") as f:
             f.write(response.content)
         print(f"Photo saved as {filepath}")
