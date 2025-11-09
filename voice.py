@@ -81,13 +81,14 @@ def transcribe_audio(model, audio_path):
 
 # --- Random Question Setup ---
 question_med = [
-    "Did you check your blood sugar today?",
-    "What was your last blood sugar reading?",
-    "How many times did you check your glucose today?",
-    "Did you take your medication or insulin today?",
-    "What time did you take your first dose this morning?",
-    "Have you had any dizziness, sweating, or shaking today?",
-    "Did you feel very thirsty or urinate more than usual today?"
+    "Hello, welcome to InsuLink, your digital companion to all your diabetic needs"
+    # "Did you check your blood sugar today?",
+    # "What was your last blood sugar reading?",
+    # "How many times did you check your glucose today?",
+    # "Did you take your medication or insulin today?",
+    # "What time did you take your first dose this morning?",
+    # "Have you had any dizziness, sweating, or shaking today?",
+    # "Did you feel very thirsty or urinate more than usual today?"
 ]
 
 question_food = [
