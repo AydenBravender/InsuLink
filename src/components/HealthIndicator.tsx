@@ -1,11 +1,25 @@
-import { useState } from "react";
+import { useMemo } from "react";
+import { useHealth } from "../context/HealthContext";
 
 export default function HealthIndicator() {
-  // Placeholder state for health indicator
-  const [healthStatus] = useState<HealthStatus>("good"); // Change manually for testing
+  const { healthValue } = useHealth();
 
-  // Health status types
   type HealthStatus = "good" | "caution" | "critical";
+
+  // Map numeric backend value to status
+  const healthStatus: HealthStatus = useMemo(() => {
+    switch (healthValue) {
+      case 2:
+        return "critical";
+      case 1:
+      case 3:
+      case 4:
+        return "caution";
+      case 0:
+      default:
+        return "good";
+    }
+  }, [healthValue]);
 
   // Color mapping for easy reference
   const healthColors = {

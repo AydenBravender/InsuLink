@@ -1,0 +1,133 @@
+*** Begin Patch
+*** Update File: server.py
+@@
+-import base64
+-import json
+-import os
+-import re
+-from typing import Dict, List, Tuple
++import base64
++import json
++import os
++import re
++from typing import Dict, List, Tuple
++from pathlib import Path
+@@
+-# ============================================================
+-# ECG LIVE STATUS POLLING & ALERTING
+-# ============================================================
+-
+-ECG_STATUS_FILE = "ecg_live_status.txt"
+-
+-# persistent memory for state change detection
+-last_ecg_value = None
+-ecg_row_counter = 0
++# ============================================================
++# ECG LIVE STATUS POLLING & ALERTING
++# ============================================================
++
++# Resolve the status file path relative to this file's directory
++_BASE_DIR = Path(__file__).resolve().parent
++ECG_STATUS_FILE = _BASE_DIR / "ecg_live_status.txt"
++
++# persistent memory for state change detection
++last_ecg_value = None
++ecg_row_counter = 0
++_ecg_missing_warned = False
+@@
+-    2: {
+-        "title": "Abnormal Ventricular Activity",
+-        "message": "Ventricular ectopic activity detected. Medical follow-up recommended.",
+-        "severity": "critical"
+-    },
++    2: {
++        "title": "Abnormal Ventricular Activity",
++        "message": "Ventricular ectopic beats detected. Recommended to follow up clinically.",
++        "severity": "critical"
++    },
+@@
+-@app.get("/ecg/status")
+-def get_ecg_status():
+-    global last_ecg_value, ecg_row_counter
+-
+-    # Debug to confirm it's running
+-    print("[ECG] get_ecg_status called")
+-
+-    # Initialize counter
+-    if "ecg_row_counter" not in globals():
+-        ecg_row_counter = 0
+-
+-    # If file missing, assume normal
+-    if not os.path.exists(ECG_STATUS_FILE):
+-        print(f"[ECG] Row {ecg_row_counter}: FILE_MISSING ?+' value=0")
+-        ecg_row_counter += 1
+-        return {"value": 0, "new_alert": None}
+-
+-    # Try to read the file
+-    try:
+-        with open(ECG_STATUS_FILE, "r") as f:
+-            raw = f.read().strip()
+-            value = int(raw) if raw != "" else 0
+-    except:
+-        print(f"[ECG] Row {ecg_row_counter}: READ_ERROR ?+' value=0")
+-        ecg_row_counter += 1
+-        return {"value": 0, "new_alert": None}
+-
+-    # ?o. Print row + current ECG value
+-    print(f"[ECG] Row {ecg_row_counter}: value={value}")
+-    ecg_row_counter += 1
+-
+-    # Detect state change
+-    new_alert = None
+-    if value != last_ecg_value:
+-        alert_data = generate_ecg_alert(value)
+-        if alert_data:
+-            print(f"[ECG] State change detected: old={last_ecg_value}, new={value}")
+-            new_alert = alert_data
+-
+-    last_ecg_value = value
+-
+-    return {
+-        "value": value,
+-        "new_alert": new_alert
+-    }
++@app.get("/ecg/status")
++def get_ecg_status():
++    global last_ecg_value, ecg_row_counter, _ecg_missing_warned
++
++    value = 0
++
++    # Check for file presence relative to server.py directory
++    if ECG_STATUS_FILE.exists():
++        # Reset missing warning latch once the file appears
++        if _ecg_missing_warned:
++            _ecg_missing_warned = False
++        try:
++            raw = ECG_STATUS_FILE.read_text(encoding="utf-8").strip()
++            # Treat empty content as 0
++            value = int(raw) if raw != "" else 0
++        except Exception:
++            # On any read/parse issue, treat as 0
++            value = 0
++    else:
++        # Only warn once per missing state to avoid spam
++        if not _ecg_missing_warned:
++            print(f"[ECG] FILE_MISSING at {ECG_STATUS_FILE}")
++            _ecg_missing_warned = True
++        value = 0
++
++    # Log row with current value
++    print(f"[ECG] Row {ecg_row_counter}: value={value}")
++    ecg_row_counter += 1
++
++    # Detect state change and produce alert only for non-zero
++    new_alert = None
++    if value != last_ecg_value:
++        alert_data = generate_ecg_alert(value)
++        if alert_data is not None:
++            new_alert = alert_data
++
++    last_ecg_value = value
++
++    return {"value": value, "new_alert": new_alert}
+*** End Patch

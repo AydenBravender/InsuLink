@@ -1,0 +1,80 @@
+"""FastAPI server for InsuLink.
+
+Uses Groq Whisper for transcription and Groq Llama3 for analysis.
+"""
+
+import base64
+import json
+import os
+import re
+from typing import Dict, List, Tuple
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, UploadFile, File, Form
+from fastapi.middleware.cors import CORSMiddleware
+from groq import Groq
+from pydantic import BaseModel
+
+
+print("[server] Server.py loaded ✅")
+# ---------------------------
+# Env & client
+# ---------------------------
+load_dotenv()
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    print("[server] WARNING: GROQ_API_KEY is missing. /analyze and /transcribe will fail.")
+else:
+    print("[server] GROQ_API_KEY loaded ✅")
+
+client = Groq(api_key=GROQ_API_KEY)
+
+# ---------------------------
+# FastAPI app & CORS
+# ---------------------------
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+def root():
+    return {"ok": True}
+
+# ---------------------------
+# Question bank (9 total)
+# ---------------------------
+QUESTIONS: Dict[str, List[str]] = {
+    "med": [
+        "Did you take all prescribed diabetes meds or insulin today?",
+        "At what times did you take your medications?",
+        "Have you felt symptoms of high or low blood sugar today?",
+    ],
+    "food": [
+        "What did you eat for breakfast?",
+        "What did you eat for lunch and dinner?",
+        "How many sugary drinks or desserts did you have?",
+    ],
+    "sleep": [
+        "What time did you go to bed and wake up?",
+        "Roughly how many hours did you sleep?",
+        "How rested do you feel on a 1–10 scale?",
+    ],
+}
+
+class AnalyzeRequest(BaseModel):
+    answers: Dict[str, List[str]]  # { "med": [...3], "food": [...3], "sleep": [...3] }
+
+class AnalyzeResponse(BaseModel):
+    scores: dict[str, int]
+    average: float

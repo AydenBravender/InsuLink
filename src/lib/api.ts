@@ -4,13 +4,15 @@ const BASE = "http://127.0.0.1:8000";
 export async function getQuestions() {
   const r = await fetch(`${BASE}/questions`);
   if (!r.ok) throw new Error("Failed to load questions");
-  const json = (await r.json()) as { questions: { med: string[]; food: string[]; sleep: string[] } };
+  const json = (await r.json()) as {
+    questions: { med: string[]; food: string[]; sleep: string[] };
+  };
   console.log("[api] questions", json);
   return json;
 }
 
 export async function ttsSpeak(text: string) {
-  // No backend needed
+  // frontend TTS (browser)
   return text;
 }
 
@@ -33,13 +35,22 @@ export async function analyzeAnswers(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ answers: payload }),
   });
+
   if (!r.ok) throw new Error("Analyze failed");
+
   const json = (await r.json()) as {
     scores: { med: number; food: number; sleep: number };
     average: number;
     levels: { med: string; food: string; sleep: string };
-    suggestions: { med: string; food: string; sleep: string };
+    overview: { med: string; food: string; sleep: string }; // ✅ FIXED
   };
+
   console.log("[api] analyze response", json);
   return json;
 }
+
+export async function fetchECGStatus() {
+  const r = await fetch("http://127.0.0.1:8000/ecg_status");
+  return r.json();
+}
+

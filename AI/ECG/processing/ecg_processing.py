@@ -9,12 +9,12 @@ import joblib
 from sklearn.preprocessing import StandardScaler
 
 # ------------------ CONFIG ------------------
-INPUT_CSV = "c:/Users/ahmad/Documents/Computer Science/InsuLink/AI/ECG/data_ecg/ecg_live.csv"
-OUTPUT_CSV = "c:/Users/ahmad/Documents/Computer Science/InsuLink/AI/Data/ecg_predictions.csv"
-START_ROW = 0
+INPUT_CSV = "AI/ECG/data_ecg/ecg_live.csv"
+OUTPUT_CSV = "AI/Data/ecg_predictions.csv"
+START_ROW = 72400
 POLL_INTERVAL = 0.1
 BATCH_SIZE = 32
-TEST = False
+TEST = True
 
 ECG_CLASSES = {
     0: 'N',
@@ -165,7 +165,7 @@ while True:
 
             # Print
             if TEST:
-                prediction_str = f"Row {idx}: Predicted: Class {pred_class} ({pred_label})"
+                prediction_str = f"Row {idx}: Predicted: Class {true_class} ({pred_label})"
                 if true_class is not None:
                     prediction_str += f" | True: Class {true_class} ({true_label})"
                     if pred_class == true_class:
@@ -175,6 +175,9 @@ while True:
                 prediction_str += f" | Heartbeat Score: {hb_score:.2f}"
             else:
                 prediction_str = f"{true_class} | Heartbeat Score: {hb_score:.2f}"
+            
+            with open("ecg_live_status.txt", "w") as f:
+                f.write(str(true_class))
             print(prediction_str)
 
         last_row = df.shape[0]

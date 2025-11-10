@@ -6,3 +6,16 @@
   --color-primary: #e63b68;
   --color-accent: #33a0dd;
 }
+
+@keyframes toastTimer {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-toast-timer {
+  animation: toastTimer linear forwards;
+}
