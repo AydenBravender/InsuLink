@@ -2,6 +2,7 @@
 *.wav
 _pycache__/
 tmp_*.*
+venv/
 
 #environment variables
 .env
