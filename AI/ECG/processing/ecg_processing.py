@@ -11,7 +11,7 @@ from sklearn.preprocessing import StandardScaler
 # ------------------ CONFIG ------------------
 INPUT_CSV = "c:/Users/ahmad/Documents/Computer Science/InsuLink/AI/ECG/data_ecg/ecg_live.csv"
 OUTPUT_CSV = "c:/Users/ahmad/Documents/Computer Science/InsuLink/AI/Data/ecg_predictions.csv"
-START_ROW = 81000
+START_ROW = 0
 POLL_INTERVAL = 0.1
 BATCH_SIZE = 32
 TEST = False
@@ -92,9 +92,7 @@ for idx, label in ECG_CLASSES.items():
     print(f"{idx} ({label}): {['Normal beat', 'Supraventricular premature beat', 'Ventricular premature beat', 'Fusion of ventricular and normal', 'Unclassifiable beat'][idx]}")
 print("\nPress Ctrl+C to stop...\n")
 
-heartbeat_scores = []
-HEARTBEATS_PER_PRINT = 80
-
+# ------------------ HEARTBEAT SCORING ------------------
 def calculate_heartbeat_score(pred_class, probabilities, true_class):
     """
     Score heartbeat 1-10.
@@ -107,7 +105,6 @@ def calculate_heartbeat_score(pred_class, probabilities, true_class):
         return probabilities[0] * 10
     else:
         # Abnormal beat, cap score at 5
-        # Use model probability of normal to penalize
         score = min(5, 5 - (probabilities[0]*5))  # higher N probability = slightly lower score
         score = max(1, score)
         return score
@@ -154,13 +151,6 @@ while True:
 
             # ---------------- HEARTBEAT SCORING ----------------
             hb_score = calculate_heartbeat_score(pred_class, probabilities, true_class)
-            heartbeat_scores.append(hb_score)
-
-            avg_score_str = ""
-            if len(heartbeat_scores) >= HEARTBEATS_PER_PRINT:
-                avg_score = sum(heartbeat_scores) / len(heartbeat_scores)
-                avg_score_str = f" | Avg Heartbeat Score (last {HEARTBEATS_PER_PRINT}): {avg_score:.2f}"
-                heartbeat_scores = []
             # ---------------------------------------------------
 
             # Write prediction
@@ -182,11 +172,9 @@ while True:
                         prediction_str += " ✓"
                 prediction_str += " - " + ", ".join(f"{label}: {prob:.3f}" for label, prob in 
                                                     sorted([(ECG_CLASSES[i], p) for i, p in enumerate(probabilities)]))
-                prediction_str += avg_score_str
+                prediction_str += f" | Heartbeat Score: {hb_score:.2f}"
             else:
-                prediction_str = true_class
-                if avg_score_str:
-                    prediction_str = f"{prediction_str}{avg_score_str}"
+                prediction_str = f"{true_class} | Heartbeat Score: {hb_score:.2f}"
             print(prediction_str)
 
         last_row = df.shape[0]
