@@ -271,17 +271,17 @@ forced_ecg_hold_rows_remaining = 0
 ECG_MESSAGES = {
     1: {
         "title": "Irregular Heartbeat Detected",
-        "message": "Your ECG shows supraventricular ectopic beats. Monitor symptoms.",
+        "message": "Your ECG shows signs of supraventricular ectopic beats. Monitor symptoms.",
         "severity": "caution"
     },
     2: {
         "title": "Abnormal Ventricular Activity",
-        "message": "Ventricular ectopic beats detected. Recommended to follow up clinically.",
+        "message": "Signs of Ventricular ectopic beats detected. Recommended to follow up clinically.",
         "severity": "critical"
     },
     3: {
         "title": "Fusion Beat Detected",
-        "message": "Mixed ventricular activity observed. Monitoring advised.",
+        "message": "Signs of mixed ventricular activity observed. Monitoring advised.",
         "severity": "caution"
     },
     4: {
