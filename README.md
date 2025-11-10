@@ -1,73 +1,122 @@
-# Welcome to your Lovable project
+# InsuLink
 
-## Project info
+## About the Project
 
-**URL**: https://lovable.dev/projects/735f5744-3fb4-4020-b2f6-b11e3b66e607
+InsuLink is a project designed to act as a health company for Type 1 Diabetics.  
+It helps diabetic individuals and their care-teams monitor and manage insulin data more effectively by linking device output, app inputs, and alerts in one unified interface.
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## Features
 
-**Use Lovable**
+Here are some of the key functionality included:
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/735f5744-3fb4-4020-b2f6-b11e3b66e607) and start prompting.
+- Provide linking of insulin events with user device data.
+- Dashboard to visualise insulin usage, trends, and alerts.
+- Integration or import of sensor/device data (e.g., via Python components).
+- Web-based front-end using React/TypeScript for ease of use.
+- Responsive UI styled with Tailwind CSS and shadcn-ui.
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+## Tech Stack
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+The project uses the following technologies:
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- **Front-end:** TypeScript, React, built with Vite.
+- **UI styling:** Tailwind CSS, shadcn-ui.
+- **Back-end / scripts:** Python (various utilities) and Node.js environment for the web part.
+- **Package management:** npm/yarn for the front-end; Python requirements.txt for back-end.
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## Getting Started
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Prerequisites
 
-# Step 3: Install the necessary dependencies.
-npm i
+Before you begin, ensure you have the following installed:
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+- Node.js
+- npm
+- Python
+- fastapi==0.95.2
+- uvicorn[standard]==0.22.0
+- pydantic<2
+- python-multipart==0.0.9
+- groq>=0.5.0
+- gTTS==2.4.0
+- python-dotenv==1.0.1
+- tensorflow
+- numpy
+
+### Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/AydenBravender/InsuLink.git
+```
+
+Change into the project directory:
+
+```bash
+cd InsuLink
+```
+
+Install front-end dependencies:
+
+```bash
+npm install
+```
+
+Install Python dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+### Running Locally
+
+To start the development server for the front-end:
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+This will launch the web app with live reload.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+For the back-end / Python scripts:
 
-**Use GitHub Codespaces**
+```bash
+uvicorn server:app --reload
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+---
 
-## What technologies are used for this project?
+## Usage
 
-This project is built with:
+- Launch the web interface at `http://localhost:5173`.
+- Sign up / log in
+- Upload insulin data.
+- Use the dashboard to view data, trends, alerts.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+---
 
-## How can I deploy this project?
+## Contributing
 
-Simply open [Lovable](https://lovable.dev/projects/735f5744-3fb4-4020-b2f6-b11e3b66e607) and click on Share -> Publish.
+Contributions are very welcome! Here’s how you can help:
 
-## Can I connect a custom domain to my Lovable project?
+1. Fork the repository.
+2. Create a new branch: `git checkout -b feature/YourFeature`
+3. Make your changes, commit with clear messages.
+4. Push to your fork: `git push origin feature/YourFeature`
+5. Open a Pull Request against the main branch and describe your changes.
 
-Yes, you can!
+Please ensure your code follows existing style (e.g., TypeScript linting, Python formatting).
+Feel free to open issues if you find bugs or have enhancement ideas.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+---
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## License
+
+This project is licensed under the MIT License. See LICENSE for more details.
