@@ -10,11 +10,8 @@ export async function getQuestions() {
 }
 
 export async function ttsSpeak(text: string) {
-  const form = new FormData();
-  form.append("text", text);
-  const r = await fetch(`${BASE}/tts`, { method: "POST", body: form });
-  const json = await r.json();
-  return json.audioUrl as string; // data: URL
+  // No backend needed
+  return text;
 }
 
 export async function transcribeAudio(blob: Blob) {

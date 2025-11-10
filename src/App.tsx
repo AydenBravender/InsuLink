@@ -9,6 +9,9 @@ import Results from "./pages/Results.tsx";
 import SensorFeed from "./pages/SensorFeed.tsx";
 import Assistant from "./pages/Assistant.tsx";
 import IncidentDashboard from "./pages/IncidentDashboard.tsx";
+import StressTest from "./pages/StressTest";
+
+
 function App() {
   return (
     <Router>
@@ -21,6 +24,7 @@ function App() {
         <Route path="/sensorfeed" element={<SensorFeed />} />
         <Route path="/assistant" element={<Assistant />} />
         <Route path="/incidentdashboard" element={<IncidentDashboard />} />
+        <Route path="/stress-test" element={<StressTest />} />
       </Routes>
     </Router>
   );

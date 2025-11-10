@@ -1,6 +1,7 @@
 import Navbar from "../components/Navbar";
 import Dial from "../components/Dial";
 import HealthIndicator from "../components/HealthIndicator";
+import InsulinTracker from "../components/InsulinTracker";
 
 export default function AppShell() {
 
@@ -9,6 +10,7 @@ export default function AppShell() {
       {/* Top bar */}
       <Navbar />
       <HealthIndicator />
+      <InsulinTracker />
       <Dial />
     </div>
   );

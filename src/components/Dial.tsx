@@ -58,6 +58,16 @@ export default function Dial() {
           </button>
         </div>
 
+        <div className="flex items-center gap-2">
+          Stress Test
+          <button
+            className="btn btn-lg btn-circle"
+            onClick={() => navigate("/stress-test")}
+          >
+            <Zap className="w-6 h-6" />
+          </button>
+        </div>
+
       </div>
     </div>
   );

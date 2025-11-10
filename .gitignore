@@ -1,5 +1,7 @@
 *insulink
 *.wav
+_pycache__/
+tmp_*.*
 
 #environment variables
 .env

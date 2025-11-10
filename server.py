@@ -118,36 +118,28 @@ def get_questions():
     return {"questions": QUESTIONS}
 
 @app.post("/tts")
-async def tts(text: str = Form(None)):  # accept but not required
-    # Generate ~0.5s of silence as PCM WAV (8kHz, mono, 16-bit)
-    sample_rate = 8000
-    duration_s = 0.5
-    num_samples = int(sample_rate * duration_s)
-    n_channels = 1
-    bits_per_sample = 16
-    byte_rate = sample_rate * n_channels * (bits_per_sample // 8)
-    block_align = n_channels * (bits_per_sample // 8)
-    data_size = num_samples * block_align
-    chunk_size = 36 + data_size
+async def tts(text: str = Form(...)):
+    """
+    Real TTS using Groq's gpt-4o-mini-tts engine.
+    Returns a base64-encoded MP3.
+    """
 
-    header = (
-        b"RIFF"
-        + chunk_size.to_bytes(4, "little")
-        + b"WAVE"
-        + b"fmt "
-        + (16).to_bytes(4, "little")
-        + (1).to_bytes(2, "little")  # PCM
-        + n_channels.to_bytes(2, "little")
-        + sample_rate.to_bytes(4, "little")
-        + byte_rate.to_bytes(4, "little")
-        + block_align.to_bytes(2, "little")
-        + bits_per_sample.to_bytes(2, "little")
-        + b"data"
-        + data_size.to_bytes(4, "little")
-    )
-    wav_bytes = header + (b"\x00" * data_size)
-    b64 = base64.b64encode(wav_bytes).decode("utf-8")
-    return {"audioUrl": f"data:audio/wav;base64,{b64}"}
+    try:
+        tts_response = client.audio.speech.create(
+            model="gpt-4o-mini-tts",
+            voice="alloy",        # available voices: alloy, verse, shimmer
+            input=text
+        )
+
+        audio_bytes = tts_response.audio  # raw bytes
+        b64_audio = base64.b64encode(audio_bytes).decode("utf-8")
+
+        return {"audioUrl": f"data:audio/mp3;base64,{b64_audio}"}
+
+    except Exception as e:
+        print("[TTS ERROR]", e)
+        # Return silence fallback
+        return {"audioUrl": ""}
 
 @app.post("/transcribe")
 async def transcribe(file: UploadFile = File(...)):
