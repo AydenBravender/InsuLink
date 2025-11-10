@@ -9,20 +9,19 @@ import joblib
 from sklearn.preprocessing import StandardScaler
 
 # ------------------ CONFIG ------------------
-INPUT_CSV = "c:/Users/ahmad/Documents/Computer Science/Projects/InsuLink/AI/ECG/data_ecg/ecg_live.csv"
-OUTPUT_CSV = "c:/Users/ahmad/Documents/Computer Science/Projects/InsuLink/AI/Data/ecg_predictions.csv"
-START_ROW = 81000      # Row number to start processing from (0-based index)
-POLL_INTERVAL = 0.1    # seconds between checks for new data
-BATCH_SIZE = 32        # batch size for processing
-
+INPUT_CSV = "c:/Users/ahmad/Documents/Computer Science/InsuLink/AI/ECG/data_ecg/ecg_live.csv"
+OUTPUT_CSV = "c:/Users/ahmad/Documents/Computer Science/InsuLink/AI/Data/ecg_predictions.csv"
+START_ROW = 81000
+POLL_INTERVAL = 0.1
+BATCH_SIZE = 32
 TEST = False
 
 ECG_CLASSES = {
-    0: 'N',  # Normal beat
-    1: 'S',  # Supraventricular premature beat
-    2: 'V',  # Ventricular premature beat
-    3: 'F',  # Fusion of ventricular and normal beat
-    4: 'Q'   # Unclassifiable beat
+    0: 'N',
+    1: 'S',
+    2: 'V',
+    3: 'F',
+    4: 'Q'
 }
 
 # ------------------ SIGNAL HANDLER ------------------
@@ -54,13 +53,11 @@ except Exception:
 
 # ------------------ HELPERS ------------------
 def parse_features(row):
-    """Parse features from MIT-BIH CSV row format. Last column is class label, rest are features."""
     if isinstance(row, pd.Series) and len(row) > 1:
         return row.values[:-1]
     return None
 
 def predict_row(features):
-    """Make prediction for a single row of features."""
     if len(features) != 187:
         print(f"Warning: Expected 187 features, got {len(features)}")
         return None, None, None
@@ -95,6 +92,26 @@ for idx, label in ECG_CLASSES.items():
     print(f"{idx} ({label}): {['Normal beat', 'Supraventricular premature beat', 'Ventricular premature beat', 'Fusion of ventricular and normal', 'Unclassifiable beat'][idx]}")
 print("\nPress Ctrl+C to stop...\n")
 
+heartbeat_scores = []
+HEARTBEATS_PER_PRINT = 80
+
+def calculate_heartbeat_score(pred_class, probabilities, true_class):
+    """
+    Score heartbeat 1-10.
+    - Normal beat (true_class=0) -> 1-10 based on model confidence.
+    - Abnormal beat (true_class 1-4) -> capped at 5.
+    """
+    if true_class is None:
+        return probabilities[0] * 10
+    if true_class == 0:
+        return probabilities[0] * 10
+    else:
+        # Abnormal beat, cap score at 5
+        # Use model probability of normal to penalize
+        score = min(5, 5 - (probabilities[0]*5))  # higher N probability = slightly lower score
+        score = max(1, score)
+        return score
+
 # ------------------ MAIN LOOP ------------------
 while True:
     try:
@@ -114,7 +131,6 @@ while True:
             time.sleep(POLL_INTERVAL)
             continue
 
-        # Process new rows
         for idx in range(last_row, df.shape[0]):
             if idx < START_ROW:
                 continue
@@ -127,6 +143,26 @@ while True:
             pred_class, pred_label, probabilities = predict_row(features)
             prob_str = {f"{ECG_CLASSES[i]}": f"{p:.3f}" for i, p in enumerate(probabilities)}
 
+            true_class = None
+            true_label = None
+            if len(row) > 1:
+                try:
+                    true_class = int(row.iloc[-1])
+                    true_label = ECG_CLASSES.get(true_class, 'Unknown')
+                except:
+                    pass
+
+            # ---------------- HEARTBEAT SCORING ----------------
+            hb_score = calculate_heartbeat_score(pred_class, probabilities, true_class)
+            heartbeat_scores.append(hb_score)
+
+            avg_score_str = ""
+            if len(heartbeat_scores) >= HEARTBEATS_PER_PRINT:
+                avg_score = sum(heartbeat_scores) / len(heartbeat_scores)
+                avg_score_str = f" | Avg Heartbeat Score (last {HEARTBEATS_PER_PRINT}): {avg_score:.2f}"
+                heartbeat_scores = []
+            # ---------------------------------------------------
+
             # Write prediction
             out_row = pd.DataFrame({
                 'timestamp': [pd.Timestamp.now()],
@@ -137,16 +173,6 @@ while True:
             })
             out_row.to_csv(OUTPUT_CSV, mode='a', header=False, index=False)
 
-            # True label if available
-            true_class = None
-            true_label = None
-            if len(row) > 1:
-                try:
-                    true_class = int(row.iloc[-1])
-                    true_label = ECG_CLASSES.get(true_class, 'Unknown')
-                except:
-                    pass
-
             # Print
             if TEST:
                 prediction_str = f"Row {idx}: Predicted: Class {pred_class} ({pred_label})"
@@ -155,9 +181,12 @@ while True:
                     if pred_class == true_class:
                         prediction_str += " ✓"
                 prediction_str += " - " + ", ".join(f"{label}: {prob:.3f}" for label, prob in 
-                                                sorted([(ECG_CLASSES[i], p) for i, p in enumerate(probabilities)]))
+                                                    sorted([(ECG_CLASSES[i], p) for i, p in enumerate(probabilities)]))
+                prediction_str += avg_score_str
             else:
                 prediction_str = true_class
+                if avg_score_str:
+                    prediction_str = f"{prediction_str}{avg_score_str}"
             print(prediction_str)
 
         last_row = df.shape[0]
